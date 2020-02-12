@@ -1,0 +1,8 @@
+{
+    "name": "project1",
+    "team": "team1",
+    "owner": "owner1",
+    "email": "appsupport1@test.com",
+    "cpu": 2,
+    "memory": 24
+}
