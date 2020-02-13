@@ -108,6 +108,22 @@ func newJob(p *Project) *batchv1.Job {
 						},
 					},
 					RestartPolicy: corev1.RestartPolicyOnFailure,
+					HostAliases: []corev1.HostAlias{
+						{
+							IP:        "10.51.4.163",
+							Hostnames: []string{"tfs"},
+						},
+					},
+					ServiceAccountName: "flux",
+					NodeSelector:       map[string]string{"node-role.kubernetes.io/infra": "true"},
+					Volumes: []corev1.Volume{
+						{
+							Name: "repo",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+					},
 				},
 			},
 		},
