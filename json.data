@@ -1,4 +1,6 @@
 {
+    "cluster": "mycluster",
+    "buildnumber": "003",
     "name": "project1",
     "team": "team1",
     "owner": "owner1",

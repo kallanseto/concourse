@@ -11,17 +11,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// Namespace where we will deploy & run
+// Constants
 const NAMESPACE = "flux"
+const SERVICEACCOUNT = "flux"
+const GITSECRET = "flux-git-auth"
+const REPOIP = "10.51.4.163"
+const REPOHOSTNAME = "tfs"
 
 // Project type
 type Project struct {
-	Name   string `json:"name"`
-	Owner  string `json:"owner`
-	Team   string `json:"team"`
-	Email  string `json:"email"`
-	CPU    int    `json:"cpu"`
-	Memory int    `json:"memory"`
+	Cluster     string `json:"cluster"`
+	Buildnumber string `json:"buildnumber"`
+	Name        string `json:"name"`
+	Owner       string `json:"owner`
+	Team        string `json:"team"`
+	Email       string `json:"email"`
+	CPU         int    `json:"cpu"`
+	Memory      int    `json:"memory"`
 }
 
 func jobCreateProject(c echo.Context) error {
@@ -29,6 +35,7 @@ func jobCreateProject(c echo.Context) error {
 	if err := c.Bind(p); err != nil {
 		return err
 	}
+
 	j := newJob(p)
 
 	// // creates the in-cluster config
@@ -67,60 +74,150 @@ func newJob(p *Project) *batchv1.Job {
 				Spec: corev1.PodSpec{
 					InitContainers: []corev1.Container{
 						{
-							Name:    "git-runner",
+							Name:    "step-1-clone-repo",
 							Image:   "git-runner:1.0",
 							Command: []string{"/bin/git"},
-							Args:    []string{"clone", "-b", p.Name + "-onboarding", "https://github.com/kallanseto/namespaces"},
+							Args: []string{
+								"clone",
+								"-b",
+								p.Name + "-onboarding",
+								"https://$(GIT_AUTHUSER):$(GIT_AUTHKEY)github.com/kallanseto/namespaces",
+							},
+							WorkingDir: "/tmp/repo",
+							EnvFrom: []corev1.EnvFromSource{
+								{
+									SecretRef: &corev1.SecretEnvSource{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: GITSECRET,
+										},
+									},
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "repo",
+									MountPath: "/tmp/repo",
+								},
+								{
+									Name:      "certs",
+									MountPath: "/tmp/certs",
+									ReadOnly:  true,
+								},
+							},
+						},
+						{
+							Name:    "step-2-add-project",
+							Image:   "onboard-cli:1.0",
+							Command: []string{"/bin/onboard"},
+							Args: []string{
+								"--cluster=" + p.Cluster,
+								"--buildnumber=" + p.Buildnumber,
+								"--name=" + p.Name,
+								"--owner=" + p.Owner,
+								"--team=" + p.Team,
+								"--email=" + p.Email,
+								"--cpu=" + strconv.Itoa(p.CPU),
+								"--memory=" + strconv.Itoa(p.Memory),
+							},
+							WorkingDir: "/tmp/repo",
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "repo",
+									MountPath: "/tmp/repo",
+								},
+							},
+						},
+						{
+							Name:    "step-3-commit-changes",
+							Image:   "git-runner:1.0",
+							Command: []string{"/bin/git"},
+							Args: []string{
+								"commit",
+								"-am",
+								p.Name + "-onboarding",
+							},
+							WorkingDir: "/tmp/repo",
+							EnvFrom: []corev1.EnvFromSource{
+								{
+									SecretRef: &corev1.SecretEnvSource{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: GITSECRET,
+										},
+									},
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "repo",
+									MountPath: "/tmp/repo",
+								},
+							},
+						},
+						{
+							Name:    "step-4-push-changes",
+							Image:   "git-runner:1.0",
+							Command: []string{"/bin/git"},
+							Args: []string{
+								"push",
+								"-u",
+								"origin",
+								p.Name + "-onboarding",
+							},
+							WorkingDir: "/tmp/repo",
+							EnvFrom: []corev1.EnvFromSource{
+								{
+									SecretRef: &corev1.SecretEnvSource{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: GITSECRET,
+										},
+									},
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "repo",
+									MountPath: "/tmp/repo",
+								},
+								{
+									Name:      "certs",
+									MountPath: "/tmp/certs",
+									ReadOnly:  true,
+								},
+							},
 						},
 					},
 					Containers: []corev1.Container{
 						{
-							Name:    "onboard-cli",
+							Name:    "job-complete",
 							Image:   "onboard-cli:1.0",
-							Command: []string{"/bin/onboard"},
-							Args:    []string{"arg1", "arg2"},
-							Env: []corev1.EnvVar{
-								{
-									Name:  "ONBOARD_NAME",
-									Value: p.Name,
-								},
-								{
-									Name:  "ONBOARD_OWNER",
-									Value: p.Owner,
-								},
-								{
-									Name:  "ONBOARD_TEAM",
-									Value: p.Team,
-								},
-								{
-									Name:  "ONBOARD_EMAIL",
-									Value: p.Email,
-								},
-								{
-									Name:  "ONBOARD_CPU",
-									Value: strconv.Itoa(p.CPU),
-								},
-								{
-									Name:  "ONBOARD_MEMORY",
-									Value: strconv.Itoa(p.Memory),
-								},
-							},
+							Command: []string{"echo"},
+							Args:    []string{"job completed"},
 						},
 					},
 					RestartPolicy: corev1.RestartPolicyOnFailure,
 					HostAliases: []corev1.HostAlias{
 						{
-							IP:        "10.51.4.163",
-							Hostnames: []string{"tfs"},
+							IP:        REPOIP,
+							Hostnames: []string{REPOHOSTNAME},
 						},
 					},
-					ServiceAccountName: "flux",
+					ServiceAccountName: SERVICEACCOUNT,
 					NodeSelector:       map[string]string{"node-role.kubernetes.io/infra": "true"},
 					Volumes: []corev1.Volume{
 						{
 							Name: "repo",
 							VolumeSource: corev1.VolumeSource{
 								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+						{
+							Name: "certs",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: "rootca",
+									},
+								},
 							},
 						},
 					},
