@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -9,6 +10,9 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 // Constants
@@ -38,24 +42,25 @@ func jobCreateProject(c echo.Context) error {
 
 	j := newJob(p)
 
-	// // creates the in-cluster config
-	// config, err := rest.InClusterConfig()
-	// if err != nil {
-	// 	panic(err.Error())
-	// }
-	// // creates the clientset
-	// clientset, err := kubernetes.NewForConfig(config)
-	// if err != nil {
-	// 	panic(err.Error())
-	// }
+	// creates the in-cluster config
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		panic(err.Error())
+	}
+	// creates the clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err.Error())
+	}
 
-	// jobsClient := clientset.BatchV1().Jobs(NAMESPACE)
+	jobsClient := clientset.BatchV1().Jobs(NAMESPACE)
 
-	// result, err := jobsClient.Create(context.TODO(), j, metav1.CreateOptions{})
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// fmt.Printf("Created job %q.\n", result.GetObjectMeta().GetName())
+	//	result, err := jobsClient.Create(context.TODO(), j, metav1.CreateOptions{})
+	result, err := jobsClient.Create(j)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Created job %q.\n", result.GetObjectMeta().GetName())
 
 	return c.JSONPretty(http.StatusCreated, j, "  ")
 }
