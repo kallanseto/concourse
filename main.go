@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -15,7 +16,7 @@ import (
 )
 
 // Constants
-const NAMESPACE = "flux"
+const NAMESPACE = "flux-system"
 const SERVICEACCOUNT = "flux"
 const GITSECRET = "flux-git-auth"
 const REPOIP = "10.51.4.163"
@@ -28,12 +29,17 @@ const REPODIR = REPOWORKINGDIR + "/" + REPONAME
 type Project struct {
 	Cluster     string `json:"cluster"`
 	Buildnumber string `json:"buildnumber"`
-	Name        string `json:"name"`
-	Owner       string `json:"owner`
-	Team        string `json:"team"`
-	Email       string `json:"email"`
-	CPU         int    `json:"cpu"`
-	Memory      int    `json:"memory"`
+	Name        string `json: "name"`
+	Team        string `json: "team"`
+	Email       string `json: "email"`
+	Owner       string `json: "owner"`
+	Service     string `json: "service"`
+	Application string `json: "application"`
+	Domain      string `json: "domain"`
+	CPU         int    `json: "cpu"`
+	Memory      int    `json: "memory"`
+	Egressip    string `json: "egressip"`
+	Netid       string `json: "netid"`
 }
 
 func jobCreateProject(c echo.Context) error {
@@ -57,8 +63,8 @@ func jobCreateProject(c echo.Context) error {
 
 	jobsClient := clientset.BatchV1().Jobs(NAMESPACE)
 
-	//	result, err := jobsClient.Create(context.TODO(), j, metav1.CreateOptions{})
-	result, err := jobsClient.Create(j)
+	result, err := jobsClient.Create(context.TODO(), j, metav1.CreateOptions{})
+	//result, err := jobsClient.Create(j)
 	if err != nil {
 		panic(err)
 	}
@@ -83,11 +89,12 @@ func newJob(p *Project) *batchv1.Job {
 						{
 							Name:    "step-1-clone-repo",
 							Image:   "alpine/git",
-							Command: []string{"clone"},
+							Command: []string{"git"},
 							Args: []string{
+								"clone",
 								"-c user.email=ocp-platform@test.com",
 								"-c user.name=svcp_ocp_gitops",
-								"https://$(GIT_AUTHUSER):$(GIT_AUTHKEY)github.com/kallanseto/clingo",
+								"https://$(GIT_AUTHUSER):$(GIT_AUTHKEY)@github.com/kallanseto/clingo",
 							},
 							WorkingDir: REPOWORKINGDIR,
 							EnvFrom: []corev1.EnvFromSource{
@@ -114,8 +121,9 @@ func newJob(p *Project) *batchv1.Job {
 						{
 							Name:    "step-2-checkout-branch",
 							Image:   "alpine/git",
-							Command: []string{"checkout"},
+							Command: []string{"git"},
 							Args: []string{
+								"checkout",
 								"-b",
 								p.Name + "-onboarding",
 							},
@@ -130,14 +138,18 @@ func newJob(p *Project) *batchv1.Job {
 						{
 							Name:    "step-3-add-project",
 							Image:   "kallanseto/clingo:0.1",
-							Command: []string{"clingo create"},
+							Command: []string{"clingo"},
 							Args: []string{
+								"create",
 								"--cluster=" + p.Cluster,
 								"--buildnumber=" + p.Buildnumber,
 								"--name=" + p.Name,
 								"--owner=" + p.Owner,
 								"--team=" + p.Team,
 								"--email=" + p.Email,
+								"--service=" + p.Service,
+								"--application=" + p.Application,
+								"--domain=" + p.Domain,
 								"--cpu=" + strconv.Itoa(p.CPU),
 								"--memory=" + strconv.Itoa(p.Memory),
 							},
@@ -152,8 +164,9 @@ func newJob(p *Project) *batchv1.Job {
 						{
 							Name:    "step-4-add-files",
 							Image:   "alpine/git",
-							Command: []string{"add"},
+							Command: []string{"git"},
 							Args: []string{
+								"add",
 								".",
 							},
 							WorkingDir: REPODIR,
@@ -167,8 +180,9 @@ func newJob(p *Project) *batchv1.Job {
 						{
 							Name:    "step-5-commit-changes",
 							Image:   "alpine/git",
-							Command: []string{"commit"},
+							Command: []string{"git"},
 							Args: []string{
+								"commit",
 								"-am",
 								p.Name + "-onboarding",
 							},
@@ -183,8 +197,9 @@ func newJob(p *Project) *batchv1.Job {
 						{
 							Name:    "step-6-push-changes",
 							Image:   "alpine/git",
-							Command: []string{"push"},
+							Command: []string{"git"},
 							Args: []string{
+								"push",
 								"-u",
 								"origin",
 								p.Name + "-onboarding",

@@ -1,10 +1,13 @@
 {
-    "cluster": "mycluster",
+    "cluster": "lnocp",
     "buildnumber": "003",
-    "name": "project1",
-    "team": "team1",
-    "owner": "owner1",
-    "email": "appsupport1@test.com",
-    "cpu": 2,
-    "memory": 24
+    "name": "project5",
+    "team": "team5",
+    "owner": "owner5",
+    "email": "appsupport5@test.com",
+    "service": "open banking",
+    "application": "ob app5",
+    "domain": "product",
+    "cpu": 5,
+    "memory": 55
 }

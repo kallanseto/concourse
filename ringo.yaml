@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  creationTimestamp: null
+  labels:
+    run: ringo
+  name: ringo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: ringo
+  strategy: {}
+  template:
+    metadata:
+      creationTimestamp: null
+      labels:
+        run: ringo
+    spec:
+      containers:
+      - image: kallanseto/ringo:0.1.5
+        name: ringo
+        resources: {}
+      serviceAccountName: flux
+status: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  creationTimestamp: null
+  labels:
+    run: ringo
+  name: ringo
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    run: ringo
+status:
+  loadBalancer: {}
