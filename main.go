@@ -10,7 +10,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -21,6 +20,9 @@ const SERVICEACCOUNT = "flux"
 const GITSECRET = "flux-git-auth"
 const REPOIP = "10.51.4.163"
 const REPOHOSTNAME = "tfs"
+const REPONAME = "clingo"
+const REPOWORKINGDIR = "/tmp/repo"
+const REPODIR = REPOWORKINGDIR + "/" + REPONAME
 
 // Project type
 type Project struct {
@@ -80,15 +82,14 @@ func newJob(p *Project) *batchv1.Job {
 					InitContainers: []corev1.Container{
 						{
 							Name:    "step-1-clone-repo",
-							Image:   "git-runner:1.0",
-							Command: []string{"/bin/git"},
+							Image:   "alpine/git",
+							Command: []string{"clone"},
 							Args: []string{
-								"clone",
-								"-b",
-								p.Name + "-onboarding",
-								"https://$(GIT_AUTHUSER):$(GIT_AUTHKEY)github.com/kallanseto/namespaces",
+								"-c user.email=ocp-platform@test.com",
+								"-c user.name=svcp_ocp_gitops",
+								"https://$(GIT_AUTHUSER):$(GIT_AUTHKEY)github.com/kallanseto/clingo",
 							},
-							WorkingDir: "/tmp/repo",
+							WorkingDir: REPOWORKINGDIR,
 							EnvFrom: []corev1.EnvFromSource{
 								{
 									SecretRef: &corev1.SecretEnvSource{
@@ -101,7 +102,7 @@ func newJob(p *Project) *batchv1.Job {
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "repo",
-									MountPath: "/tmp/repo",
+									MountPath: REPOWORKINGDIR,
 								},
 								{
 									Name:      "certs",
@@ -111,9 +112,25 @@ func newJob(p *Project) *batchv1.Job {
 							},
 						},
 						{
-							Name:    "step-2-add-project",
-							Image:   "onboard-cli:1.0",
-							Command: []string{"/bin/onboard"},
+							Name:    "step-2-checkout-branch",
+							Image:   "alpine/git",
+							Command: []string{"checkout"},
+							Args: []string{
+								"-b",
+								p.Name + "-onboarding",
+							},
+							WorkingDir: REPODIR,
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "repo",
+									MountPath: REPOWORKINGDIR,
+								},
+							},
+						},
+						{
+							Name:    "step-3-add-project",
+							Image:   "kallanseto/clingo:0.1",
+							Command: []string{"clingo create"},
 							Args: []string{
 								"--cluster=" + p.Cluster,
 								"--buildnumber=" + p.Buildnumber,
@@ -124,51 +141,55 @@ func newJob(p *Project) *batchv1.Job {
 								"--cpu=" + strconv.Itoa(p.CPU),
 								"--memory=" + strconv.Itoa(p.Memory),
 							},
-							WorkingDir: "/tmp/repo",
+							WorkingDir: REPODIR + "/test",
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "repo",
-									MountPath: "/tmp/repo",
+									MountPath: REPOWORKINGDIR,
 								},
 							},
 						},
 						{
-							Name:    "step-3-commit-changes",
-							Image:   "git-runner:1.0",
-							Command: []string{"/bin/git"},
+							Name:    "step-4-add-files",
+							Image:   "alpine/git",
+							Command: []string{"add"},
 							Args: []string{
-								"commit",
+								".",
+							},
+							WorkingDir: REPODIR,
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "repo",
+									MountPath: REPOWORKINGDIR,
+								},
+							},
+						},
+						{
+							Name:    "step-5-commit-changes",
+							Image:   "alpine/git",
+							Command: []string{"commit"},
+							Args: []string{
 								"-am",
 								p.Name + "-onboarding",
 							},
-							WorkingDir: "/tmp/repo",
-							EnvFrom: []corev1.EnvFromSource{
-								{
-									SecretRef: &corev1.SecretEnvSource{
-										LocalObjectReference: corev1.LocalObjectReference{
-											Name: GITSECRET,
-										},
-									},
-								},
-							},
+							WorkingDir: REPODIR,
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "repo",
-									MountPath: "/tmp/repo",
+									MountPath: REPOWORKINGDIR,
 								},
 							},
 						},
 						{
-							Name:    "step-4-push-changes",
-							Image:   "git-runner:1.0",
-							Command: []string{"/bin/git"},
+							Name:    "step-6-push-changes",
+							Image:   "alpine/git",
+							Command: []string{"push"},
 							Args: []string{
-								"push",
 								"-u",
 								"origin",
 								p.Name + "-onboarding",
 							},
-							WorkingDir: "/tmp/repo",
+							WorkingDir: REPODIR,
 							EnvFrom: []corev1.EnvFromSource{
 								{
 									SecretRef: &corev1.SecretEnvSource{
@@ -181,7 +202,7 @@ func newJob(p *Project) *batchv1.Job {
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "repo",
-									MountPath: "/tmp/repo",
+									MountPath: REPOWORKINGDIR,
 								},
 								{
 									Name:      "certs",
@@ -194,7 +215,7 @@ func newJob(p *Project) *batchv1.Job {
 					Containers: []corev1.Container{
 						{
 							Name:    "job-complete",
-							Image:   "onboard-cli:1.0",
+							Image:   "busybox",
 							Command: []string{"echo"},
 							Args:    []string{"job completed"},
 						},
