@@ -180,7 +180,7 @@ func newJob(p *clingo.Project) *batchv1.Job {
 								"-am",
 								p.Name + "-onboarding",
 							},
-							WorkingDir: repoWorkingDir + "/" + repoWorkingDir,
+							WorkingDir: repoWorkingDir + "/" + repoName,
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "repo",
