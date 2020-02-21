@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -12,7 +14,25 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
+
+// Global environment variables
+var cluster = os.Getenv("CLUSTER")
+var buildNumber = os.Getenv("BUILDNUMBER")
+var namespace = os.Getenv("NAMESPACE")
+var gitRepo = os.Getenv("GIT_REPO")
+var gitName = os.Getenv("GIT_NAME")
+var gitEmail = os.Getenv("GIT_EMAIL")
+var gitSecret = os.Getenv("GIT_SECRET")
+var gitIP = os.Getenv("GIT_IP")
+var gitHostname = os.Getenv("GIT_HOSTNAME")
+var gitClientImage = os.Getenv("GIT_CLIENT_IMAGE")
+var repoName = os.Getenv("REPO_NAME")
+var repoWorkingDir = os.Getenv("REPO_WORKINGDIR")
+var clingoImage = os.Getenv("CLINGO_IMAGE")
+var clingoBaseDir = os.Getenv("CLINGO_BASEDIR")
 
 func jobCreateProject(c echo.Context) error {
 	p := new(clingo.Project)
@@ -22,46 +42,30 @@ func jobCreateProject(c echo.Context) error {
 
 	j := newJob(p)
 
-	// // creates the in-cluster config
-	// config, err := rest.InClusterConfig()
-	// if err != nil {
-	// 	panic(err.Error())
-	// }
-	// // creates the clientset
-	// clientset, err := kubernetes.NewForConfig(config)
-	// if err != nil {
-	// 	panic(err.Error())
-	// }
+	// creates the in-cluster config
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		panic(err.Error())
+	}
+	// creates the clientset
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		panic(err.Error())
+	}
 
-	// jobsClient := clientset.BatchV1().Jobs(NAMESPACE)
+	jobsClient := clientset.BatchV1().Jobs(namespace)
 
-	// //result, err := jobsClient.Create(context.TODO(), j, metav1.CreateOptions{})
-	// result, err := jobsClient.Create(j)
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// fmt.Printf("Created job %q.\n", result.GetObjectMeta().GetName())
+	result, err := jobsClient.Create(context.TODO(), j, metav1.CreateOptions{})
+	//result, err := jobsClient.Create(j)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("Created job %q.\n", result.GetObjectMeta().GetName())
 
 	return c.JSONPretty(http.StatusCreated, j, "  ")
 }
 
 func newJob(p *clingo.Project) *batchv1.Job {
-	// Environment variables
-	cluster := os.Getenv("CLUSTER")
-	buildNumber := os.Getenv("BUILDNUMBER")
-	namespace := os.Getenv("NAMESPACE")
-	gitRepo := os.Getenv("GIT_REPO")
-	gitName := os.Getenv("GIT_NAME")
-	gitEmail := os.Getenv("GIT_EMAIL")
-	gitSecret := os.Getenv("GIT_SECRET")
-	gitIP := os.Getenv("GIT_IP")
-	gitHostname := os.Getenv("GIT_HOSTNAME")
-	gitClientImage := os.Getenv("GIT_CLIENT_IMAGE")
-	repoName := os.Getenv("REPO_NAME")
-	repoWorkingDir := os.Getenv("REPO_WORKINGDIR")
-	clingoImage := os.Getenv("CLINGO_IMAGE")
-	clingoBaseDir := os.Getenv("CLINGO_BASEDIR")
-
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: p.Name + "-",
