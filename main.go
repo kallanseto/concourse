@@ -1,83 +1,71 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"net/http"
+	"os"
 	"strconv"
+
+	clingo "clingo/cmd"
 
 	"github.com/labstack/echo"
 	"github.com/labstack/echo/middleware"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
-// Constants
-const NAMESPACE = "flux-system"
-const SERVICEACCOUNT = "flux"
-const GITSECRET = "flux-git-auth"
-const REPOIP = "10.51.4.163"
-const REPOHOSTNAME = "tfs"
-const REPONAME = "clingo"
-const REPOWORKINGDIR = "/tmp/repo"
-const REPODIR = REPOWORKINGDIR + "/" + REPONAME
-
-// Project type
-type Project struct {
-	Cluster     string `json:"cluster"`
-	Buildnumber string `json:"buildnumber"`
-	Name        string `json: "name"`
-	Team        string `json: "team"`
-	Email       string `json: "email"`
-	Owner       string `json: "owner"`
-	Service     string `json: "service"`
-	Application string `json: "application"`
-	Domain      string `json: "domain"`
-	CPU         int    `json: "cpu"`
-	Memory      int    `json: "memory"`
-	Egressip    string `json: "egressip"`
-	Netid       string `json: "netid"`
-}
-
 func jobCreateProject(c echo.Context) error {
-	p := new(Project)
+	p := new(clingo.Project)
 	if err := c.Bind(p); err != nil {
 		return err
 	}
 
 	j := newJob(p)
 
-	// creates the in-cluster config
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		panic(err.Error())
-	}
-	// creates the clientset
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err.Error())
-	}
+	// // creates the in-cluster config
+	// config, err := rest.InClusterConfig()
+	// if err != nil {
+	// 	panic(err.Error())
+	// }
+	// // creates the clientset
+	// clientset, err := kubernetes.NewForConfig(config)
+	// if err != nil {
+	// 	panic(err.Error())
+	// }
 
-	jobsClient := clientset.BatchV1().Jobs(NAMESPACE)
+	// jobsClient := clientset.BatchV1().Jobs(NAMESPACE)
 
-	result, err := jobsClient.Create(context.TODO(), j, metav1.CreateOptions{})
-	//result, err := jobsClient.Create(j)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Printf("Created job %q.\n", result.GetObjectMeta().GetName())
+	// //result, err := jobsClient.Create(context.TODO(), j, metav1.CreateOptions{})
+	// result, err := jobsClient.Create(j)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Printf("Created job %q.\n", result.GetObjectMeta().GetName())
 
 	return c.JSONPretty(http.StatusCreated, j, "  ")
 }
 
-func newJob(p *Project) *batchv1.Job {
+func newJob(p *clingo.Project) *batchv1.Job {
+	// Environment variables
+	cluster := os.Getenv("CLUSTER")
+	buildNumber := os.Getenv("BUILDNUMBER")
+	namespace := os.Getenv("NAMESPACE")
+	gitRepo := os.Getenv("GIT_REPO")
+	gitName := os.Getenv("GIT_NAME")
+	gitEmail := os.Getenv("GIT_EMAIL")
+	gitSecret := os.Getenv("GIT_SECRET")
+	gitIP := os.Getenv("GIT_IP")
+	gitHostname := os.Getenv("GIT_HOSTNAME")
+	gitClientImage := os.Getenv("GIT_CLIENT_IMAGE")
+	repoName := os.Getenv("REPO_NAME")
+	repoWorkingDir := os.Getenv("REPO_WORKINGDIR")
+	clingoImage := os.Getenv("CLINGO_IMAGE")
+	clingoBaseDir := os.Getenv("CLINGO_BASEDIR")
+
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: p.Name + "-",
-			Namespace:    NAMESPACE,
+			Namespace:    namespace,
 		},
 		Spec: batchv1.JobSpec{
 			Template: corev1.PodTemplateSpec{
@@ -88,20 +76,20 @@ func newJob(p *Project) *batchv1.Job {
 					InitContainers: []corev1.Container{
 						{
 							Name:    "step-1-clone-repo",
-							Image:   "alpine/git",
+							Image:   gitClientImage,
 							Command: []string{"git"},
 							Args: []string{
 								"clone",
-								"-c user.email=ocp-platform@test.com",
-								"-c user.name=svcp_ocp_gitops",
-								"https://$(GIT_AUTHUSER):$(GIT_AUTHKEY)@github.com/kallanseto/clingo",
+								"-c user.email=" + gitEmail,
+								"-c user.name=" + gitName,
+								"https://$(GIT_AUTHUSER):$(GIT_AUTHKEY)@" + gitRepo,
 							},
-							WorkingDir: REPOWORKINGDIR,
+							WorkingDir: repoWorkingDir,
 							EnvFrom: []corev1.EnvFromSource{
 								{
 									SecretRef: &corev1.SecretEnvSource{
 										LocalObjectReference: corev1.LocalObjectReference{
-											Name: GITSECRET,
+											Name: gitSecret,
 										},
 									},
 								},
@@ -109,7 +97,7 @@ func newJob(p *Project) *batchv1.Job {
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "repo",
-									MountPath: REPOWORKINGDIR,
+									MountPath: repoWorkingDir,
 								},
 								{
 									Name:      "certs",
@@ -120,29 +108,29 @@ func newJob(p *Project) *batchv1.Job {
 						},
 						{
 							Name:    "step-2-checkout-branch",
-							Image:   "alpine/git",
+							Image:   gitClientImage,
 							Command: []string{"git"},
 							Args: []string{
 								"checkout",
 								"-b",
 								p.Name + "-onboarding",
 							},
-							WorkingDir: REPODIR,
+							WorkingDir: repoWorkingDir + "/" + repoName,
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "repo",
-									MountPath: REPOWORKINGDIR,
+									MountPath: repoWorkingDir,
 								},
 							},
 						},
 						{
 							Name:    "step-3-add-project",
-							Image:   "kallanseto/clingo:0.1",
+							Image:   clingoImage,
 							Command: []string{"clingo"},
 							Args: []string{
 								"create",
-								"--cluster=" + p.Cluster,
-								"--buildnumber=" + p.Buildnumber,
+								"--cluster=" + cluster,
+								"--buildnumber=" + buildNumber,
 								"--name=" + p.Name,
 								"--owner=" + p.Owner,
 								"--team=" + p.Team,
@@ -150,53 +138,55 @@ func newJob(p *Project) *batchv1.Job {
 								"--service=" + p.Service,
 								"--application=" + p.Application,
 								"--domain=" + p.Domain,
+								"--namespacevip=" + p.Namespacevip,
+								"--snatip=" + p.Snatip,
 								"--cpu=" + strconv.Itoa(p.CPU),
 								"--memory=" + strconv.Itoa(p.Memory),
 							},
-							WorkingDir: REPODIR + "/test",
+							WorkingDir: clingoBaseDir,
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "repo",
-									MountPath: REPOWORKINGDIR,
+									MountPath: repoWorkingDir,
 								},
 							},
 						},
 						{
 							Name:    "step-4-add-files",
-							Image:   "alpine/git",
+							Image:   gitClientImage,
 							Command: []string{"git"},
 							Args: []string{
 								"add",
 								".",
 							},
-							WorkingDir: REPODIR,
+							WorkingDir: repoWorkingDir + "/" + repoName,
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "repo",
-									MountPath: REPOWORKINGDIR,
+									MountPath: repoWorkingDir,
 								},
 							},
 						},
 						{
 							Name:    "step-5-commit-changes",
-							Image:   "alpine/git",
+							Image:   gitClientImage,
 							Command: []string{"git"},
 							Args: []string{
 								"commit",
 								"-am",
 								p.Name + "-onboarding",
 							},
-							WorkingDir: REPODIR,
+							WorkingDir: repoWorkingDir + "/" + repoWorkingDir,
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "repo",
-									MountPath: REPOWORKINGDIR,
+									MountPath: repoWorkingDir,
 								},
 							},
 						},
 						{
 							Name:    "step-6-push-changes",
-							Image:   "alpine/git",
+							Image:   gitClientImage,
 							Command: []string{"git"},
 							Args: []string{
 								"push",
@@ -204,12 +194,12 @@ func newJob(p *Project) *batchv1.Job {
 								"origin",
 								p.Name + "-onboarding",
 							},
-							WorkingDir: REPODIR,
+							WorkingDir: repoWorkingDir + "/" + repoName,
 							EnvFrom: []corev1.EnvFromSource{
 								{
 									SecretRef: &corev1.SecretEnvSource{
 										LocalObjectReference: corev1.LocalObjectReference{
-											Name: GITSECRET,
+											Name: gitSecret,
 										},
 									},
 								},
@@ -217,7 +207,7 @@ func newJob(p *Project) *batchv1.Job {
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "repo",
-									MountPath: REPOWORKINGDIR,
+									MountPath: repoWorkingDir,
 								},
 								{
 									Name:      "certs",
@@ -238,12 +228,11 @@ func newJob(p *Project) *batchv1.Job {
 					RestartPolicy: corev1.RestartPolicyOnFailure,
 					HostAliases: []corev1.HostAlias{
 						{
-							IP:        REPOIP,
-							Hostnames: []string{REPOHOSTNAME},
+							IP:        gitIP,
+							Hostnames: []string{gitHostname},
 						},
 					},
-					ServiceAccountName: SERVICEACCOUNT,
-					NodeSelector:       map[string]string{"node-role.kubernetes.io/infra": "true"},
+					NodeSelector: map[string]string{"node-role.kubernetes.io/infra": "true"},
 					Volumes: []corev1.Volume{
 						{
 							Name: "repo",

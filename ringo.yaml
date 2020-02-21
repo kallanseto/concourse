@@ -1,7 +1,43 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    run: ringo
+  name: ringo
+spec:
+  ports:
+  - port: 8080
+    protocol: TCP
+    targetPort: 8080
+  selector:
+    run: ringo
+status:
+  loadBalancer: {}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ringo
+data:
+  CLUSTER: lnocp
+  BUILDNUMBER: "003"
+  CLINGO_BASEDIR: /tmp/repo/clingo/test
+  CLINGO_IMAGE: kallanseto/clingo:0.1
+  GIT_CLIENT_IMAGE: alpine/git:latest
+  GIT_EMAIL: ocp-platform@test.com
+  GIT_HOSTNAME: tfs
+  GIT_IP: 10.51.4.163
+  GIT_NAME: svcp_ocp_gitops
+  GIT_REPO: github.com/kallanseto/clingo
+  GIT_SECRET: flux-git-auth
+  NAMESPACE: flux-system
+  REPO_NAME: clingo
+  REPO_WORKINGDIR: /tmp/repo
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  creationTimestamp: null
   labels:
     run: ringo
   name: ringo
@@ -20,23 +56,9 @@ spec:
       containers:
       - image: kallanseto/ringo:0.1.5
         name: ringo
+        envFrom:
+        - configMapRef:
+            name: ringo
         resources: {}
       serviceAccountName: flux
 status: {}
----
-apiVersion: v1
-kind: Service
-metadata:
-  creationTimestamp: null
-  labels:
-    run: ringo
-  name: ringo
-spec:
-  ports:
-  - port: 8080
-    protocol: TCP
-    targetPort: 8080
-  selector:
-    run: ringo
-status:
-  loadBalancer: {}
