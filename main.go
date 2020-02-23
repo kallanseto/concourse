@@ -62,7 +62,7 @@ func jobCreateProject(c echo.Context) error {
 	}
 	fmt.Printf("Created job %q.\n", result.GetObjectMeta().GetName())
 
-	return c.JSONPretty(http.StatusCreated, j, "  ")
+	return c.JSONPretty(http.StatusCreated, result.GetObjectMeta().GetName(), "  ")
 }
 
 func newJob(p *clingo.Project) *batchv1.Job {
