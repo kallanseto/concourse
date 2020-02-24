@@ -86,6 +86,7 @@ func newJob(p *clingo.Project) *batchv1.Job {
 								"clone",
 								"-c user.email=" + gitEmail,
 								"-c user.name=" + gitName,
+								"-c http.sslCAPath=/tmp/certs",
 								"https://$(GIT_AUTHUSER):$(GIT_AUTHKEY)@" + gitRepo,
 							},
 							WorkingDir: repoWorkingDir,
@@ -249,7 +250,7 @@ func newJob(p *clingo.Project) *batchv1.Job {
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
-										Name: "rootca",
+										Name: "ing-rootca",
 									},
 								},
 							},
