@@ -31,6 +31,7 @@ data:
   GIT_NAME: svcp_ocp_gitops
   GIT_REPO: github.com/kallanseto/clingo
   GIT_SECRET: flux-git-auth
+  JOB_IMAGE: busybox
   NAMESPACE: flux-system
   REPO_NAME: clingo
   REPO_WORKINGDIR: /tmp/repo

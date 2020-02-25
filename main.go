@@ -33,6 +33,7 @@ var repoName = os.Getenv("REPO_NAME")
 var repoWorkingDir = os.Getenv("REPO_WORKINGDIR")
 var clingoImage = os.Getenv("CLINGO_IMAGE")
 var clingoBaseDir = os.Getenv("CLINGO_BASEDIR")
+var jobImage = os.Getenv("JOB_IMAGE")
 
 func jobCreateProject(c echo.Context) error {
 	p := new(clingo.Project)
@@ -215,7 +216,7 @@ func newJob(p *clingo.Project) *batchv1.Job {
 					Containers: []corev1.Container{
 						{
 							Name:    "job-complete",
-							Image:   "busybox",
+							Image:   jobImage,
 							Command: []string{"echo"},
 							Args:    []string{"job completed"},
 						},
