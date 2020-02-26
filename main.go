@@ -35,8 +35,13 @@ var clingoImage = os.Getenv("CLINGO_IMAGE")
 var clingoBaseDir = os.Getenv("CLINGO_BASEDIR")
 var jobImage = os.Getenv("JOB_IMAGE")
 
+type jobRequest clingo.Project
+type jobResponse struct {
+	JobID string `json: "jobid"`
+}
+
 func jobCreateProject(c echo.Context) error {
-	p := new(clingo.Project)
+	p := new(jobRequest)
 	if err := c.Bind(p); err != nil {
 		return err
 	}
@@ -61,12 +66,17 @@ func jobCreateProject(c echo.Context) error {
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("Created job %q.\n", result.GetObjectMeta().GetName())
 
-	return c.JSONPretty(http.StatusCreated, result.GetObjectMeta().GetName(), "  ")
+	resp := &jobResponse{
+		JobID: result.GetObjectMeta().GetName(),
+	}
+
+	fmt.Printf("Created job %q.\n", resp)
+
+	return c.JSONPretty(http.StatusCreated, resp, "  ")
 }
 
-func newJob(p *clingo.Project) *batchv1.Job {
+func newJob(p *jobRequest) *batchv1.Job {
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: p.Name + "-",
