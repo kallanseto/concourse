@@ -3,22 +3,22 @@ apiVersion: v1
 kind: Service
 metadata:
   labels:
-    run: ringo
-  name: ringo
+    run: onboard
+  name: onboard
 spec:
   ports:
   - port: 8080
     protocol: TCP
     targetPort: 8080
   selector:
-    run: ringo
+    run: onboard
 status:
   loadBalancer: {}
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: ringo
+  name: onboard
 data:
   CLUSTER: lnocp
   BUILDNUMBER: "003"
@@ -40,26 +40,26 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    run: ringo
-  name: ringo
+    run: onboard
+  name: onboard
 spec:
   replicas: 1
   selector:
     matchLabels:
-      run: ringo
+      run: onboard
   strategy: {}
   template:
     metadata:
       creationTimestamp: null
       labels:
-        run: ringo
+        run: onboard
     spec:
       containers:
-      - image: kallanseto/ringo:0.1.5
-        name: ringo
+      - image: kallanseto/onboard:0.1.5
+        name: onboard
         envFrom:
         - configMapRef:
-            name: ringo
+            name: onboard
         resources: {}
       serviceAccountName: flux
 status: {}
